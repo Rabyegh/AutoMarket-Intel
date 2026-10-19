@@ -1,4 +1,4 @@
-"""Run log: persists one row per pipeline step to data/run_log.json (JSONL)."""
+"""Append-only JSONL run log that tracks pipeline step results."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Any
 
 
 class RunLog:
-    """Append-only run log stored as newline-delimited JSON."""
+    """Append-only JSONL run log with resume-support."""
 
     def __init__(self, path: Path, run_id: str) -> None:
         self._path = path
@@ -43,7 +43,7 @@ class RunLog:
             fh.write(json.dumps(row) + "\n")
 
     def get_completed_steps(self) -> set[str]:
-        """Return steps that completed successfully (for --resume support)."""
+        """Return steps that completed OK (for --resume)."""
         if not self._path.exists():
             return set()
         completed: set[str] = set()

@@ -6,6 +6,10 @@ import os
 from pathlib import Path
 
 
+def _optional(key: str, default: str = "") -> str:
+    return os.environ.get(key, default)
+
+
 def _require(key: str) -> str:
     val = os.environ.get(key)
     if not val:
@@ -16,27 +20,30 @@ def _require(key: str) -> str:
     return val
 
 
-def _optional(key: str, default: str = "") -> str:
-    return os.environ.get(key, default)
-
-
 class Config:
-    """Centralised, validated config object built from env vars."""
+    """Project-wide configuration from environment variables."""
 
     # Pipeline
     env: str = _optional("PIPELINE_ENV", "local")
-    run_log_path: Path = Path(_optional("RUN_LOG_PATH", "data/run_log.json"))
+    run_log_path: Path = Path(_optional("RUN_LOG_PATH", "data/run_log.jsonl"))
 
-    # vPIC
-    vpic_base_url: str = _optional(
-        "VPIC_BASE_URL", "https://vpic.nhtsa.dot.gov/api"
-    )
-    vpic_batch_size: int = int(_optional("VPIC_BATCH_SIZE", "50"))
-    vpic_rate_sleep_s: float = float(_optional("VPIC_RATE_SLEEP_S", "1.0"))
-    vpic_max_retries: int = int(_optional("VPIC_MAX_RETRIES", "3"))
-
-    # DuckDB
+    # Data
+    raw_data_dir: Path = Path(_optional("RAW_DATA_DIR", "data/raw/used_cars"))
     duckdb_path: Path = Path(_optional("DUCKDB_PATH", "data/warehouse.duckdb"))
+
+    # Year validation bounds
+    min_year: int = int(_optional("MIN_LISTING_YEAR", "1970"))
+    max_year: int = int(_optional("MAX_LISTING_YEAR", "2025"))
+
+    # Price validation bounds (GBP)
+    min_price: int = int(_optional("MIN_PRICE_GBP", "100"))
+    max_price: int = int(_optional("MAX_PRICE_GBP", "500000"))
+
+    # Mileage validation bounds
+    max_mileage: int = int(_optional("MAX_MILEAGE_MILES", "500000"))
+
+    # Simulation
+    simulation_seed: int = int(_optional("SIMULATION_SEED", "42"))
 
     # Snowflake (optional — only required when env=snowflake)
     @staticmethod

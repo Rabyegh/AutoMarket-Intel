@@ -33,7 +33,7 @@ class JsonFormatter(logging.Formatter):
 _handler = logging.StreamHandler(sys.stdout)
 _handler.setFormatter(JsonFormatter())
 
-logger = logging.getLogger("vinpipe")
+logger = logging.getLogger("automarket")
 logger.addHandler(_handler)
 logger.setLevel(logging.INFO)
 logger.propagate = False

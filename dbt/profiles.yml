@@ -3,7 +3,7 @@ automarket_intel:
   outputs:
     duckdb:
       type: duckdb
-      path: "{{ env_var('DUCKDB_PATH', '../data/warehouse.duckdb') }}"
+      path: "{{ env_var('DUCKDB_PATH', 'data/warehouse.duckdb') }}"
       threads: 4
 
     snowflake:
@@ -17,4 +17,4 @@ automarket_intel:
       schema: raw
       threads: 4
       client_session_keep_alive: false
-      query_tag: "vinpipe"
+      query_tag: "automarket_intel"

@@ -1,6 +1,9 @@
-.PHONY: lint test demo full-refresh clean
+.PHONY: install lint test ingest dbt-deps dbt-build dbt-test report demo simulate clean
 
-# ── Developer helpers ──────────────────────────────────────
+# ── Developer setup ────────────────────────────────────────────────────────
+install:
+	uv pip install dbt-core dbt-duckdb ruff pytest pandas pyarrow duckdb pydantic rich typer
+
 lint:
 	uv run ruff check src tests
 	uv run ruff format --check src tests
@@ -9,30 +12,59 @@ format:
 	uv run ruff format src tests
 	uv run ruff check --fix src tests
 
+# ── Tests ──────────────────────────────────────────────────────────────────
 test:
-	uv run pytest tests/unit -m unit
-	uv run pytest tests/integration -m integration
+	uv run pytest tests/unit tests/integration -v
 
-# ── Pipeline ──────────────────────────────────────────────
-demo:
-	@echo "==> Running end-to-end demo (local, seeded, no network)..."
-	uv run vinpipe run --seed 42 --batches 2 --env local --fixture-decodes
-	@echo "==> Demo complete. Check data/warehouse.duckdb and docs/run_summary.md"
+test-unit:
+	uv run pytest tests/unit -v
 
-full-refresh:
-	uv run vinpipe run --seed 42 --batches 2 --env local --fixture-decodes --full-refresh
+test-integration:
+	uv run pytest tests/integration -v
 
-resume:
-	uv run vinpipe run --resume
+# ── Pipeline ───────────────────────────────────────────────────────────────
+ingest:
+	uv run python -m automarket.cli ingest \
+		--data-dir data/raw/used_cars \
+		--duckdb-path data/warehouse.duckdb
 
-# ── dbt ───────────────────────────────────────────────────
+ingest-fresh:
+	uv run python -m automarket.cli ingest \
+		--data-dir data/raw/used_cars \
+		--duckdb-path data/warehouse.duckdb \
+		--full-refresh
+
+report:
+	uv run python -m automarket.cli report \
+		--duckdb-path data/warehouse.duckdb
+
+# ── dbt ───────────────────────────────────────────────────────────────────
+dbt-deps:
+	cd dbt && uv run dbt deps
+
 dbt-build:
 	cd dbt && uv run dbt build --target duckdb
 
 dbt-test:
 	cd dbt && uv run dbt test --target duckdb
 
-# ── Housekeeping ───────────────────────────────────────────
+# ── End-to-end demo ───────────────────────────────────────────────────────
+demo: ingest dbt-build report
+	@echo ""
+	@echo "==> Demo complete. DuckDB warehouse: data/warehouse.duckdb"
+	@echo "==> Run 'make report' to see the analytical summary."
+
+# ── Optional simulation ────────────────────────────────────────────────────
+simulate:
+	uv run python -m automarket.cli simulate \
+		--duckdb-path data/warehouse.duckdb \
+		--seed 42 \
+		--weeks 8 \
+		--sample-size 1000
+
+# ── Housekeeping ───────────────────────────────────────────────────────────
 clean:
-	rm -f data/warehouse.duckdb data/warehouse.duckdb.wal data/run_log.json
-	rm -rf dbt/target dbt/logs
+	python -c "import os; [os.remove(f) for f in ['data/warehouse.duckdb', 'data/warehouse.duckdb.wal', 'data/run_log.jsonl'] if os.path.exists(f)]"
+	-if exist dbt\target rmdir /s /q dbt\target
+	-if exist dbt\logs rmdir /s /q dbt\logs
+	-if exist dbt\dbt_packages rmdir /s /q dbt\dbt_packages

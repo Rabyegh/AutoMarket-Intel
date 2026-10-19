@@ -1,0 +1,50 @@
+version: 2
+
+models:
+  - name: stg_used_car_listings
+    description: >
+      Typed and standardised used-car listing records from the raw layer.
+      One row per accepted source record. Asking prices are in GBP.
+      This is a static snapshot — no real listing timestamps are available.
+    columns:
+      - name: row_id
+        description: Deterministic identifier inherited from raw.
+        tests: [not_null, unique]
+      - name: source_file
+        tests: [not_null]
+      - name: make
+        tests: [not_null]
+      - name: model
+        tests: [not_null]
+      - name: registration_year
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 1970
+              max_value: 2025
+      - name: asking_price_gbp
+        description: Asking price in GBP. NOT a transaction or sale price.
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 100
+              max_value: 500000
+      - name: transmission
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["Manual", "Automatic", "Semi-Auto", "Other"]
+      - name: mileage_miles
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 500000
+      - name: fuel_type
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["Petrol", "Diesel", "Hybrid", "Electric", "Other"]
+      - name: vehicle_key
+        description: Surrogate key derived from make, model, year, fuel_type, transmission, engine_size_l.
+        tests: [not_null]

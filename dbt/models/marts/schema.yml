@@ -1,0 +1,40 @@
+version: 2
+
+models:
+  - name: mart_comparable_prices
+    description: >
+      Asking-price benchmarks grouped by make, model, registration year,
+      fuel type, and transmission. Includes median, mean, and IQR.
+      Listings in small peer groups (< 5) are flagged.
+    columns:
+      - name: make
+        tests: [not_null]
+      - name: model
+        tests: [not_null]
+      - name: peer_group_size
+        tests: [not_null]
+      - name: median_asking_price_gbp
+        tests: [not_null]
+
+  - name: mart_pricing_deviations
+    description: >
+      Each listing's asking price compared against the peer-group median.
+      price_vs_median_gbp > 0 means priced above median; < 0 means below.
+      These are asking prices only — not transaction or market values.
+    columns:
+      - name: listing_id
+        tests: [not_null, unique]
+      - name: asking_price_gbp
+        tests: [not_null]
+
+  - name: mart_inventory_summary
+    description: >
+      Inventory counts and price statistics by vehicle segment.
+      Represents the static source snapshot, not live market inventory.
+    columns:
+      - name: make
+        tests: [not_null]
+      - name: listing_count
+        tests: [not_null]
+      - name: median_asking_price_gbp
+        tests: [not_null]

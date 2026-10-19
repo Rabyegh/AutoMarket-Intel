@@ -13,13 +13,10 @@ venv/
 # uv
 uv.lock
 
-# DuckDB warehouse
+# DuckDB warehouse (generated, not committed)
 data/warehouse.duckdb
 data/warehouse.duckdb.wal
-
-# Raw data (large files, never rewrite)
-data/raw/fleet_events/
-data/raw/vpic/
+data/run_log.jsonl
 
 # Secrets / local config
 .env
@@ -34,10 +31,11 @@ Thumbs.db
 .vscode/settings.json
 .idea/
 
-# dbt
+# dbt generated artifacts (not committed)
 dbt/target/
 dbt/logs/
 dbt/.user.yml
+dbt/dbt_packages/
 
 # pytest
 .pytest_cache/

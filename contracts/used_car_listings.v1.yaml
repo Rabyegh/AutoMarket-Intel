@@ -1,0 +1,95 @@
+used_car_listings:
+  version: 1
+  description: >
+    UK used-car listing data derived from CSV files covering 11 makes.
+    This is a static snapshot dataset — it does not contain real listing
+    publication timestamps or transaction prices.
+
+  source_files:
+    - audi.csv       # Audi — schema A (9 columns)
+    - bmw.csv        # BMW  — schema A
+    - ford.csv       # Ford (all models) — schema A
+    - hyundi.csv     # Hyundai — schema A (tax column has encoding artefact)
+    - merc.csv       # Mercedes-Benz — schema A
+    - skoda.csv      # Skoda — schema A
+    - toyota.csv     # Toyota — schema A
+    - vauxhall.csv   # Vauxhall — schema A
+    - vw.csv         # Volkswagen — schema A
+    - cclass.csv     # Mercedes C-Class — schema B (no tax or mpg)
+    - focus.csv      # Ford Focus — schema B
+
+  excluded_files:
+    - "unclean cclass.csv"  # Raw scrape format; malformed price strings and split columns
+    - "unclean focus.csv"   # Same issues as unclean cclass.csv
+
+  schema_variants:
+    schema_a:
+      columns: [model, year, price, transmission, mileage, fuelType, tax, mpg, engineSize]
+      files: [audi.csv, bmw.csv, ford.csv, hyundi.csv, merc.csv, skoda.csv, toyota.csv, vauxhall.csv, vw.csv]
+    schema_b:
+      columns: [model, year, price, transmission, mileage, fuelType, engineSize]
+      files: [cclass.csv, focus.csv]
+      notes: "No tax or mpg — these fields are NULL in the normalised output"
+
+  canonical_fields:
+    row_id:
+      type: string
+      rule: "SHA-256 truncated to 16 chars of source_file|row_index|model|year|price|mileage; deterministic"
+
+    source_file:
+      type: string
+      rule: "Original CSV filename; provenance for each row"
+
+    make:
+      type: string
+      rule: "Inferred from filename; not present as a column in source CSVs"
+
+    model:
+      type: string
+      rule: "Stripped of leading/trailing whitespace; original source value preserved"
+
+    year:
+      type: integer
+      rule: "Registration year; valid range 1970–2025"
+
+    price_gbp:
+      type: integer
+      rule: "Asking price in GBP; NOT a transaction or sale price; valid range 100–500000"
+
+    transmission:
+      type: string
+      rule: "Normalised to: Manual | Automatic | Semi-Auto | Other"
+
+    mileage_miles:
+      type: integer
+      rule: "Odometer reading in miles; valid range 0–500000"
+
+    fuel_type:
+      type: string
+      rule: "Normalised to: Petrol | Diesel | Hybrid | Electric | Other"
+
+    tax_gbp:
+      type: integer
+      nullable: true
+      rule: "Annual road tax in GBP; NULL for schema B files"
+
+    mpg:
+      type: float
+      nullable: true
+      rule: "Miles per gallon; NULL for schema B files"
+
+    engine_size_l:
+      type: float
+      nullable: true
+      rule: "Engine displacement in litres; valid range 0.0–10.0"
+
+  important_limitations:
+    - "price_gbp is an asking price, NOT a confirmed sale or transaction price"
+    - "This dataset is a static snapshot; it does not contain listing publication dates"
+    - "The make field is inferred from the filename, not sourced from the CSV"
+    - "No unique listing ID exists in the source; row_id is a synthetic deterministic key"
+    - "Schema B files lack tax and mpg; these are NULL in the analytical layer"
+
+  evolution_policy:
+    additive_changes: allowed
+    breaking_changes: requires_v2_and_decision_record

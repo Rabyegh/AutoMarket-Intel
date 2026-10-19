@@ -1,0 +1,37 @@
+version: 2
+
+models:
+  - name: dim_vehicle
+    description: >
+      Unique vehicle configurations observed across all listing files.
+      Keyed by vehicle_key (surrogate hash of make, model, year, fuel_type,
+      transmission, engine_size_l). No VINs are present in this dataset.
+    columns:
+      - name: vehicle_key
+        tests: [not_null, unique]
+      - name: make
+        tests: [not_null]
+      - name: model
+        tests: [not_null]
+      - name: registration_year
+        tests: [not_null]
+      - name: listing_count
+        tests: [not_null]
+
+  - name: fct_listing_snapshot
+    description: >
+      One row per accepted source listing. Asks prices are in GBP.
+      This is a static snapshot — no real observation timestamps exist.
+    columns:
+      - name: listing_id
+        tests: [not_null, unique]
+      - name: vehicle_key
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_vehicle')
+              field: vehicle_key
+      - name: asking_price_gbp
+        tests: [not_null]
+      - name: mileage_miles
+        tests: [not_null]

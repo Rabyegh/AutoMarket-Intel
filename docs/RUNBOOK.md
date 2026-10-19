@@ -1,67 +1,109 @@
-# Runbook
+# Runbook — AutoMarket Intel
 
-Symptoms, causes, and fixes for known failure modes.
-_Each entry corresponds to a test in the integration suite._
+Operational reference for running and maintaining the local pipeline.
 
----
+## Normal pipeline run (from scratch)
 
-## RB-01 — `make demo` fails with missing env var
+```bash
+# 1. Ingest (all 11 CSV files → DuckDB raw.raw_used_car_listings)
+uv run python -m automarket.cli ingest \
+  --data-dir data/raw/used_cars \
+  --duckdb-path data/warehouse.duckdb
 
-**Symptom:** `EnvironmentError: Required environment variable 'X' is not set.`
-**Cause:** `.env` file missing or incomplete.
-**Fix:** `cp .env.example .env` then fill required values.
+# 2. Install dbt packages (one-time)
+.venv\Scripts\python.exe -c "from dbt.cli.main import cli; cli()" \
+  -- deps --project-dir dbt --profiles-dir dbt
 
----
+# 3. Build dbt models
+$env:DUCKDB_PATH=(Resolve-Path "data\warehouse.duckdb").Path
+.venv\Scripts\python.exe -c "from dbt.cli.main import cli; cli()" \
+  -- build --project-dir dbt --profiles-dir dbt --target duckdb
 
-## RB-02 — vPIC API rate-limited (HTTP 429 or connection timeout)
+# 4. View quick report
+uv run python -m automarket.cli report --duckdb-path data/warehouse.duckdb
+```
 
-**Symptom:** Run stalls or logs `api_failed` for many chunks.
-**Cause:** Too many requests too quickly, or NHTSA maintenance.
-**Fix:**
-1. Increase `VPIC_RATE_SLEEP_S` in `.env`.
-2. Use `--resume` — completed chunks are skipped automatically.
-3. Run with `--fixture-decodes` to use recorded responses (no network).
+## Full refresh (drop and reload)
 
----
+```bash
+uv run python -m automarket.cli ingest \
+  --data-dir data/raw/used_cars \
+  --duckdb-path data/warehouse.duckdb \
+  --full-refresh
 
-## RB-03 — DuckDB file locked
+# Then rebuild dbt models
+$env:DUCKDB_PATH=(Resolve-Path "data\warehouse.duckdb").Path
+.venv\Scripts\python.exe -c "from dbt.cli.main import cli; cli()" \
+  -- build --full-refresh --project-dir dbt --profiles-dir dbt --target duckdb
+```
 
-**Symptom:** `duckdb.IOException: Could not open database file`
-**Cause:** Another process (e.g., a previous crashed run) holds the lock.
-**Fix:** Find and kill the other process, or `make clean` to reset the warehouse.
+## Tests only
 
----
+```bash
+# All tests (unit + integration)
+uv run pytest tests/ -v
 
-## RB-04 — Incremental run adds duplicate rows
+# Unit only (fast, no I/O)
+uv run pytest tests/unit -v
 
-**Symptom:** Row counts grow unexpectedly after re-running the same batch.
-**Cause:** Idempotency guard bypassed (e.g., manifest hash not stored correctly).
-**Fix:** Run `make full-refresh`. Then check `data/run_log.json` for failed load steps.
+# Integration only (uses temp DuckDB)
+uv run pytest tests/integration -v
+```
 
----
+## Linting
 
-## RB-05 — dbt build fails with "relation does not exist"
+```bash
+uv run ruff check src tests
+uv run ruff format --check src tests
+```
 
-**Symptom:** `dbt build` errors on a staging or core model.
-**Cause:** Raw tables not yet loaded (Python load step must run first).
-**Fix:** Run `vinpipe run` to load data, then `make dbt-build`.
+## Investigating quarantined records
 
----
+```sql
+-- Connect to DuckDB
+-- duckdb data/warehouse.duckdb
 
-## RB-06 — Snowflake credits exceeded
+SELECT rejection_reason, COUNT(*) AS n
+FROM raw.raw_quarantine
+GROUP BY rejection_reason
+ORDER BY n DESC;
 
-**Symptom:** Warehouse suspended, queries fail with `RESOURCE_MONITOR` error.
-**Cause:** Resource monitor credit quota hit.
-**Fix:** Log in to Snowflake console → Account → Resource Monitors → reset or raise VINPIPE_MONITOR quota. Then re-run manually.
+SELECT * FROM raw.raw_quarantine LIMIT 20;
+```
 
----
+## Adding a new source CSV file
 
-## RB-07 — Kill and resume leaves partial batch
+1. Place the CSV in `data/raw/used_cars/`
+2. Add the filename to `INGESTIBLE_FILES` in [`discovery.py`](../src/automarket/ingestion/discovery.py)
+3. Add the make mapping to `MAKE_FROM_FILENAME`
+4. Add column mapping if the file uses a different column name
+5. Run ingestion with `--full-refresh`
+6. Run `uv run pytest tests/` to verify
 
-**Symptom:** Row counts inconsistent after a killed run and `--resume`.
-**Cause:** Load step died mid-transaction.
-**Fix:** The idempotent loader uses a delete-then-insert transaction — a partial load leaves no rows for that batch. Simply run with `--resume`.
+## Key file locations
 
----
+| Path | Purpose |
+|---|---|
+| `data/raw/used_cars/` | Source CSV files (unchanged) |
+| `data/warehouse.duckdb` | DuckDB warehouse (generated — not committed) |
+| `data/run_log.jsonl` | Append-only pipeline run log |
+| `dbt/target/` | dbt compilation artifacts (not committed) |
+| `dbt/logs/` | dbt logs (not committed) |
 
-_Add new entries here as new failure modes are discovered and tested (E6-05)._
+## Common issues
+
+**"No ingestible CSV files found"**
+- Check that `data/raw/used_cars/` exists and contains the CSV files
+- Confirm filenames match `INGESTIBLE_FILES` in `discovery.py`
+
+**dbt cannot open DuckDB file**
+- Set `DUCKDB_PATH` to the absolute path: `$env:DUCKDB_PATH=(Resolve-Path "data\warehouse.duckdb").Path`
+- dbt resolves relative paths from its working directory, which may differ
+
+**"Cannot open file ... warehouse.duckdb: locked"**
+- Another process (e.g. DBeaver, Python REPL) has the file open
+- Close other connections and retry
+
+**dbt "schema raw does not exist"**
+- The Python ingestion has not been run, or was run against a different DuckDB file
+- Run ingestion first: `uv run python -m automarket.cli ingest ...`

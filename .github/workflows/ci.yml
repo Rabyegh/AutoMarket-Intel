@@ -2,37 +2,62 @@ name: CI
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main]
   pull_request:
     branches: [main]
 
 jobs:
   lint-and-test:
+    name: Lint + Tests
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Set up Python
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.13"
 
       - name: Install uv
         run: pip install uv
 
-      - name: Install dependencies
-        run: uv sync
+      - name: Create virtual environment
+        run: uv venv .venv --python 3.13
 
-      - name: Lint
+      - name: Install dependencies
+        run: |
+          uv pip install \
+            dbt-core dbt-duckdb ruff pytest \
+            pandas pyarrow duckdb pydantic rich typer
+
+      - name: Lint (ruff check)
         run: uv run ruff check src tests
 
-      - name: Unit tests
-        run: uv run pytest tests/unit -m unit
+      - name: Lint (ruff format check)
+        run: uv run ruff format --check src tests
 
-      - name: Integration tests (DuckDB + fixtures, no network)
-        run: uv run pytest tests/integration -m integration
+      - name: Run unit tests
+        run: uv run pytest tests/unit -v --tb=short
 
-      - name: dbt build (DuckDB target)
-        run: cd dbt && uv run dbt build --target duckdb
+      - name: Run integration tests
+        run: uv run pytest tests/integration -v --tb=short
+
+      - name: Ingest CSV data (smoke test)
+        run: |
+          uv run python -m automarket.cli ingest \
+            --data-dir data/raw/used_cars \
+            --duckdb-path data/warehouse.duckdb
+
+      - name: Install dbt packages
+        run: |
+          .venv/bin/python -c "from dbt.cli.main import cli; cli()" \
+            -- deps --project-dir dbt --profiles-dir dbt
+
+      - name: dbt build
         env:
-          DUCKDB_PATH: data/warehouse.duckdb
+          DUCKDB_PATH: ${{ github.workspace }}/data/warehouse.duckdb
+        run: |
+          .venv/bin/python -c "from dbt.cli.main import cli; cli()" \
+            -- build --project-dir dbt --profiles-dir dbt --target duckdb
