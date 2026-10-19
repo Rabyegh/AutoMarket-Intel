@@ -1,0 +1,43 @@
+fleet_events:
+  version: 1
+  description: >
+    Synthetic fleet event feed keyed by VIN.
+    Validated in Python before raw load. Breaking changes bump to v2.
+
+  fields:
+    event_id:
+      type: string
+      rule: "SHA-256 of 'source_system|vin_norm|event_type|event_ts|odometer_km'; unique per batch"
+
+    source_system:
+      type: string
+      rule: not null
+
+    vin:
+      type: string
+      rule: "as received, never modified in raw"
+
+    event_type:
+      type: string
+      rule: "one of: service, inspection, fault, registration"
+
+    event_ts:
+      type: timestamp_utc
+      rule: "not null, not in the future"
+
+    odometer_km:
+      type: integer
+      rule: "nullable, >= 0"
+
+    batch_id:
+      type: string
+      rule: "deterministic; SHA-256(seed|batch_index)"
+
+    ingested_at:
+      type: timestamp_utc
+      rule: "set by loader at load time"
+
+  evolution_policy:
+    additive_changes: allowed
+    breaking_changes: requires_v2_and_adr
+    drift_check: warns_on_addition, fails_on_removal_of_contracted_field

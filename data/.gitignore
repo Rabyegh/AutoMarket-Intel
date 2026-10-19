@@ -1,0 +1,8 @@
+# Ignore DuckDB databases and generated event / vpic batches
+warehouse.duckdb
+warehouse.duckdb.wal
+run_log.json
+
+# Ignore generated synthetic fleet events and vPIC raw responses
+raw/fleet_events/
+raw/vpic/

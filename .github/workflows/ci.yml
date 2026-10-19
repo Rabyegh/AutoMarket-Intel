@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Lint
+        run: uv run ruff check src tests
+
+      - name: Unit tests
+        run: uv run pytest tests/unit -m unit
+
+      - name: Integration tests (DuckDB + fixtures, no network)
+        run: uv run pytest tests/integration -m integration
+
+      - name: dbt build (DuckDB target)
+        run: cd dbt && uv run dbt build --target duckdb
+        env:
+          DUCKDB_PATH: data/warehouse.duckdb

@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+*.whl
+.venv/
+venv/
+.env
+
+# uv
+uv.lock
+
+# DuckDB warehouse
+data/warehouse.duckdb
+data/warehouse.duckdb.wal
+
+# Raw data (large files, never rewrite)
+data/raw/fleet_events/
+data/raw/vpic/
+
+# Secrets / local config
+.env
+*.pem
+*.p8
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# dbt
+dbt/target/
+dbt/logs/
+dbt/.user.yml
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/

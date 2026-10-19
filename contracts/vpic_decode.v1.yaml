@@ -1,0 +1,39 @@
+vpic_decode:
+  version: 1
+  description: >
+    Typed flatten of vPIC's flat decode response. Field names MUST be verified
+    against a live API response in task E2-01 before depending on them.
+    See docs/SOURCES.md for the verification record.
+
+  fields:
+    vin_requested:      { type: string }
+    decode_batch_id:    { type: string }
+    requested_at:       { type: timestamp_utc }
+    http_status:        { type: integer }
+    error_code:         { type: string,  nullable: true }
+    error_text:         { type: string,  nullable: true }
+    make:               { type: string,  nullable: true }
+    model:              { type: string,  nullable: true }
+    model_year:         { type: integer, nullable: true }
+    body_class:         { type: string,  nullable: true }
+    vehicle_type:       { type: string,  nullable: true }
+    fuel_type_primary:  { type: string,  nullable: true }
+    engine_cylinders:   { type: integer, nullable: true }
+    displacement_l:     { type: float,   nullable: true }
+    drive_type:         { type: string,  nullable: true }
+    manufacturer:       { type: string,  nullable: true }
+    plant_country:      { type: string,  nullable: true }
+    raw_ref:            { type: string,  description: "path to raw JSON chunk on disk" }
+
+  decode_status_classes:
+    - invalid_format      # local check fails before any API call
+    - check_digit_fail
+    - decoded_partial
+    - no_match
+    - api_failed          # retryable; not a data verdict
+    - decoded_clean
+
+  evolution_policy:
+    additive_changes: allowed
+    breaking_changes: requires_v2_and_adr
+    drift_check: warns_on_addition, fails_on_removal_of_contracted_field
