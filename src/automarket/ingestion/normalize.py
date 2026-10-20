@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import re
 
-
 # ── String normalization ─────────────────────────────────────────────────────
+
 
 def normalize_model(raw: str) -> str:
     """Strip leading/trailing whitespace from model name."""
@@ -61,6 +61,7 @@ def normalize_transmission(raw: str) -> str:
 
 
 # ── Numeric parsing ──────────────────────────────────────────────────────────
+
 
 def parse_price(raw: str) -> int | None:
     """Parse price to integer GBP. Returns None if unparseable.

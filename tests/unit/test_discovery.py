@@ -5,10 +5,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-import pytest
 from automarket.ingestion.discovery import (
-    INGESTIBLE_FILES,
     EXCLUDED_FILES,
+    INGESTIBLE_FILES,
     make_from_filename,
     map_columns,
 )
@@ -40,8 +39,17 @@ class TestMakeFromFilename:
 class TestMapColumns:
     def test_schema_a_columns(self):
         """Standard 9-column schema (audi, bmw, ford, etc.)"""
-        cols = ["model", "year", "price", "transmission", "mileage",
-                "fuelType", "tax", "mpg", "engineSize"]
+        cols = [
+            "model",
+            "year",
+            "price",
+            "transmission",
+            "mileage",
+            "fuelType",
+            "tax",
+            "mpg",
+            "engineSize",
+        ]
         mapping = map_columns(cols)
         assert mapping["price"] == "price_gbp"
         assert mapping["mileage"] == "mileage_miles"
@@ -52,8 +60,7 @@ class TestMapColumns:
 
     def test_schema_b_columns(self):
         """7-column schema (cclass, focus — no tax or mpg)"""
-        cols = ["model", "year", "price", "transmission", "mileage",
-                "fuelType", "engineSize"]
+        cols = ["model", "year", "price", "transmission", "mileage", "fuelType", "engineSize"]
         mapping = map_columns(cols)
         assert "price" in mapping
         assert "tax" not in mapping
@@ -61,8 +68,17 @@ class TestMapColumns:
 
     def test_hyundi_tax_column_encoding_artefact(self):
         """hyundi.csv has 'tax(£)' or encoding-corrupt variant."""
-        cols = ["model", "year", "price", "transmission", "mileage",
-                "fuelType", "tax(£)", "mpg", "engineSize"]
+        cols = [
+            "model",
+            "year",
+            "price",
+            "transmission",
+            "mileage",
+            "fuelType",
+            "tax(£)",
+            "mpg",
+            "engineSize",
+        ]
         mapping = map_columns(cols)
         assert mapping.get("tax(£)") == "tax_gbp"
 

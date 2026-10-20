@@ -104,6 +104,85 @@ SELECT * FROM raw.raw_quarantine LIMIT 20;
 - Another process (e.g. DBeaver, Python REPL) has the file open
 - Close other connections and retry
 
-**dbt "schema raw does not exist"**
+**dbt "schema raw does not exist"** (local DuckDB)
 - The Python ingestion has not been run, or was run against a different DuckDB file
 - Run ingestion first: `uv run python -m automarket.cli ingest ...`
+
+**dbt "relation not found"** (Snowflake)
+- Run `automarket load-snowflake <run_id>` to load RAW data first
+- Verify `SNOWFLAKE_DATABASE` matches `AUTOMARKET_DB` in setup.sql
+
+---
+
+## Cloud pipeline runbook
+
+### Manual cloud run
+
+```bash
+export RUN_ID="$(date +%Y%m%d)-manual-001"
+
+# 1. Upload source CSVs + normalized Parquet to S3
+uv run python -m automarket.cli upload-s3 \
+  --data-dir data/raw/used_cars --run-id "$RUN_ID"
+
+# 2. Load Parquet into Snowflake RAW (COPY INTO)
+uv run python -m automarket.cli load-snowflake "$RUN_ID"
+
+# 3. Build dbt on Snowflake
+$env:SNOWFLAKE_DATABASE="AUTOMARKET_DB"
+.venv\Scripts\python.exe -c "from dbt.cli.main import cli; cli()" `
+  -- build --project-dir dbt --profiles-dir dbt --target snowflake
+```
+
+Or: `make cloud-pipeline RUN_ID=2026-10-20-001`
+
+### Idempotent re-run
+
+```bash
+# Skip S3 objects that already exist
+uv run python -m automarket.cli upload-s3 \
+  --data-dir data/raw/used_cars --run-id "$RUN_ID" --skip-existing
+
+# Snowflake: COPY INTO FORCE=FALSE skips already-loaded files automatically
+uv run python -m automarket.cli load-snowflake "$RUN_ID"
+```
+
+### Diagnose failed S3 upload
+
+- Check `AWS_DEFAULT_REGION` and `S3_RAW_BUCKET` are set
+- Verify IAM: `s3:PutObject` on `arn:aws:s3:::<bucket>/raw/*`
+- CI OIDC: confirm `AWS_OIDC_ROLE_ARN` secret and trust policy match GitHub repo
+
+### Diagnose failed Snowflake load
+
+- Verify stage: `LIST @RAW.S3_STAGE_AUTOMARKET;`
+- Check integration: `DESC INTEGRATION S3_INT_AUTOMARKET;`
+  → Confirm `STORAGE_AWS_IAM_USER_ARN` is in IAM trust policy
+  → Confirm `STORAGE_AWS_EXTERNAL_ID` matches `sts:ExternalId` condition
+- View load history in Snowflake:
+  ```sql
+  SELECT * FROM TABLE(INFORMATION_SCHEMA.COPY_HISTORY(
+    TABLE_NAME=>'RAW_USED_CAR_LISTINGS',
+    START_TIME=>DATEADD(hour,-24,CURRENT_TIMESTAMP())));
+  ```
+
+### Verify Snowflake row counts
+
+```sql
+SELECT COUNT(*) FROM AUTOMARKET_DB.RAW.RAW_USED_CAR_LISTINGS;
+-- Expected: ~108,539
+
+SELECT SOURCE_FILE, COUNT(*) FROM AUTOMARKET_DB.RAW.RAW_USED_CAR_LISTINGS
+GROUP BY SOURCE_FILE ORDER BY SOURCE_FILE;
+```
+
+### Cloud file locations
+
+| Path | Purpose |
+|---|---|
+| `infra/snowflake/setup.sql` | Snowflake bootstrap DDL (idempotent) |
+| `infra/terraform/` | AWS S3 + IAM Terraform module |
+| `.github/workflows/nightly_snowflake.yml` | Scheduled cloud CI workflow |
+| `src/automarket/storage/s3.py` | S3 upload module |
+| `src/automarket/storage/snowflake_loader.py` | Snowflake COPY INTO loader |
+| `src/automarket/storage/serializer.py` | Parquet serializer |

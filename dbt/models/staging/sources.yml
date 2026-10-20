@@ -6,7 +6,10 @@ sources:
       Append-only raw tables loaded by the Python ingestion pipeline from
       UK used-car listing CSV files. This is a static snapshot dataset;
       it does not contain real listing publication timestamps.
-    database: warehouse
+    # database resolves to:
+    #   - 'warehouse'     when target=duckdb (local; DuckDB file is named warehouse.duckdb)
+    #   - SNOWFLAKE_DATABASE (e.g. AUTOMARKET_DB) when target=snowflake
+    database: "{{ env_var('SNOWFLAKE_DATABASE', 'warehouse') }}"
     schema: raw
     tables:
       - name: raw_used_car_listings

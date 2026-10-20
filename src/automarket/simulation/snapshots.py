@@ -87,13 +87,15 @@ def simulate_snapshots(
             drift = rng.uniform(-cfg.price_drift_fraction, cfg.price_drift_fraction)
             current_price = max(100, round(current_price * (1 + drift)))
 
-            snapshots.append({
-                **row,
-                "observation_date": obs_date.isoformat(),
-                "simulated_price_gbp": current_price,
-                "is_active": is_active,
-                "is_simulated": True,
-                "simulation_seed": cfg.seed,
-            })
+            snapshots.append(
+                {
+                    **row,
+                    "observation_date": obs_date.isoformat(),
+                    "simulated_price_gbp": current_price,
+                    "is_active": is_active,
+                    "is_simulated": True,
+                    "simulation_seed": cfg.seed,
+                }
+            )
 
     return sorted(snapshots, key=lambda r: (r["observation_date"], r["source_file"]))

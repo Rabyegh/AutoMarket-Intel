@@ -1,11 +1,22 @@
 automarket_intel:
-  target: duckdb
+  target: duckdb     # default target — local development, no cloud credentials needed
   outputs:
+
+    # ── Local development target ───────────────────────────────────────────────
+    # Used by: make dbt-build, CI, local laptop runs.
+    # No AWS or Snowflake credentials required.
     duckdb:
       type: duckdb
       path: "{{ env_var('DUCKDB_PATH', 'data/warehouse.duckdb') }}"
       threads: 4
 
+    # ── Cloud target ───────────────────────────────────────────────────────────
+    # Used by: make dbt-build-snowflake, nightly_snowflake.yml CI workflow.
+    # Requires: all SNOWFLAKE_* env vars, a valid RSA private key file, and
+    #           the Snowflake schema/stage/table objects created by setup.sql.
+    #
+    # Switch with: dbt build --target snowflake
+    # Or set via env: export DBT_TARGET=snowflake
     snowflake:
       type: snowflake
       account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
@@ -14,7 +25,7 @@ automarket_intel:
       database: "{{ env_var('SNOWFLAKE_DATABASE') }}"
       warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE') }}"
       role: "{{ env_var('SNOWFLAKE_ROLE') }}"
-      schema: raw
+      schema: staging                  # default schema; models override per dbt_project.yml
       threads: 4
       client_session_keep_alive: false
-      query_tag: "automarket_intel"
+      query_tag: "automarket_intel_dbt"

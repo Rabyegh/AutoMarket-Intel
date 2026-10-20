@@ -13,7 +13,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-
 # Validation bounds — can be overridden via Config
 YEAR_MIN = 1970
 YEAR_MAX = 2025
@@ -98,6 +97,7 @@ def validate_record(row: dict[str, Any]) -> ValidationResult:
 
 
 # ── helpers ─────────────────────────────────────────────────────────────────
+
 
 def _nonempty(val: Any) -> bool:
     return val is not None and str(val).strip() != ""

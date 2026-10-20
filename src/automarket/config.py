@@ -13,7 +13,7 @@ def _optional(key: str, default: str = "") -> str:
 def _require(key: str) -> str:
     val = os.environ.get(key)
     if not val:
-        raise EnvironmentError(
+        raise OSError(
             f"Required environment variable '{key}' is not set. "
             "Copy .env.example to .env and fill in the values."
         )

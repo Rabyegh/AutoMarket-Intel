@@ -6,15 +6,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 import pytest
+
 from automarket.ingestion.normalize import (
     normalize_fuel_type,
     normalize_model,
     normalize_transmission,
+    parse_float_field,
     parse_mileage,
     parse_price,
-    parse_year,
-    parse_float_field,
     parse_tax,
+    parse_year,
 )
 
 

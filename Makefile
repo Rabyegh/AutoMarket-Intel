@@ -62,6 +62,36 @@ simulate:
 		--weeks 8 \
 		--sample-size 1000
 
+# ── Cloud pipeline ─────────────────────────────────────────────────────────
+# Requires: AWS credentials + SNOWFLAKE_* env vars (see .env.example)
+# Set RUN_ID before each cloud run: make upload-s3 RUN_ID=myrun-001
+RUN_ID ?= $(shell python -c "import uuid; print(str(uuid.uuid4())[:8])")
+
+upload-s3:
+	uv run python -m automarket.cli upload-s3 \
+		--data-dir data/raw/used_cars \
+		--run-id $(RUN_ID)
+
+upload-s3-skip-existing:
+	uv run python -m automarket.cli upload-s3 \
+		--data-dir data/raw/used_cars \
+		--run-id $(RUN_ID) \
+		--skip-existing
+
+load-snowflake:
+	uv run python -m automarket.cli load-snowflake $(RUN_ID)
+
+dbt-build-snowflake:
+	cd dbt && uv run dbt build --target snowflake
+
+dbt-test-snowflake:
+	cd dbt && uv run dbt test --target snowflake
+
+# Full cloud pipeline: upload → load → dbt
+cloud-pipeline: upload-s3 load-snowflake dbt-build-snowflake
+	@echo ""
+	@echo "==> Cloud pipeline complete for RUN_ID=$(RUN_ID)"
+
 # ── Housekeeping ───────────────────────────────────────────────────────────
 clean:
 	python -c "import os; [os.remove(f) for f in ['data/warehouse.duckdb', 'data/warehouse.duckdb.wal', 'data/run_log.jsonl'] if os.path.exists(f)]"

@@ -5,8 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-import pytest
-from automarket.ingestion.validation import validate_record, YEAR_MIN, YEAR_MAX
+from automarket.ingestion.validation import YEAR_MAX, YEAR_MIN, validate_record
 
 
 def _valid_row(**overrides):

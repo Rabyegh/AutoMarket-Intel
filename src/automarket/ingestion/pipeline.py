@@ -64,9 +64,7 @@ class IngestionStats:
         ]
         if self.rejection_reasons:
             lines.append("Rejection reasons (top):")
-            for reason, count in sorted(
-                self.rejection_reasons.items(), key=lambda x: -x[1]
-            )[:10]:
+            for reason, count in sorted(self.rejection_reasons.items(), key=lambda x: -x[1])[:10]:
                 lines.append(f"  {count:>6}  {reason}")
         lines.append(f"Duration         : {self.duration_s:.1f}s")
         return "\n".join(lines)
@@ -74,7 +72,7 @@ class IngestionStats:
 
 def _row_hash(source_file: str, row_index: int, row: dict[str, Any]) -> str:
     """Deterministic row identifier based on source file + position + key fields."""
-    payload = f"{source_file}|{row_index}|{row.get('model','')}|{row.get('year','')}|{row.get('price_gbp','')}|{row.get('mileage_miles','')}"
+    payload = f"{source_file}|{row_index}|{row.get('model', '')}|{row.get('year', '')}|{row.get('price_gbp', '')}|{row.get('mileage_miles', '')}"
     return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
@@ -199,7 +197,9 @@ def run_ingestion(
 
             logger.info(
                 "  %s: %d accepted, %d rejected",
-                csv_path.name, len(accepted), len(quarantined),
+                csv_path.name,
+                len(accepted),
+                len(quarantined),
             )
         except Exception as exc:
             logger.error("Failed to read %s: %s", csv_path.name, exc)
@@ -253,12 +253,8 @@ def run_ingestion(
     # Idempotent load: delete existing rows for each source_file, then insert
     processed_files = {r["source_file"] for r in all_accepted + all_quarantined}
     for source_file in processed_files:
-        con.execute(
-            "DELETE FROM raw.raw_used_car_listings WHERE source_file = ?", [source_file]
-        )
-        con.execute(
-            "DELETE FROM raw.raw_quarantine WHERE source_file = ?", [source_file]
-        )
+        con.execute("DELETE FROM raw.raw_used_car_listings WHERE source_file = ?", [source_file])
+        con.execute("DELETE FROM raw.raw_quarantine WHERE source_file = ?", [source_file])
 
     if all_accepted:
         con.executemany(
@@ -267,9 +263,18 @@ def run_ingestion(
             )""",
             [
                 (
-                    r["row_id"], r["source_file"], r["make"], r["model"],
-                    r["year"], r["price_gbp"], r["transmission"], r["mileage_miles"],
-                    r["fuel_type"], r.get("tax_gbp"), r.get("mpg"), r.get("engine_size_l"),
+                    r["row_id"],
+                    r["source_file"],
+                    r["make"],
+                    r["model"],
+                    r["year"],
+                    r["price_gbp"],
+                    r["transmission"],
+                    r["mileage_miles"],
+                    r["fuel_type"],
+                    r.get("tax_gbp"),
+                    r.get("mpg"),
+                    r.get("engine_size_l"),
                 )
                 for r in all_accepted
             ],
@@ -282,9 +287,18 @@ def run_ingestion(
             )""",
             [
                 (
-                    r["row_id"], r["source_file"], r["make"], r["model"],
-                    r["year"], r.get("price_gbp"), r["transmission"], r.get("mileage_miles"),
-                    r["fuel_type"], r.get("tax_gbp"), r.get("mpg"), r.get("engine_size_l"),
+                    r["row_id"],
+                    r["source_file"],
+                    r["make"],
+                    r["model"],
+                    r["year"],
+                    r.get("price_gbp"),
+                    r["transmission"],
+                    r.get("mileage_miles"),
+                    r["fuel_type"],
+                    r.get("tax_gbp"),
+                    r.get("mpg"),
+                    r.get("engine_size_l"),
                     r.get("rejection_reason"),
                 )
                 for r in all_quarantined
@@ -294,6 +308,10 @@ def run_ingestion(
     con.close()
 
     stats.duration_s = round(time.time() - start, 2)
-    logger.info("Ingestion complete: %d accepted, %d rejected in %.1fs",
-                stats.rows_accepted, stats.rows_rejected, stats.duration_s)
+    logger.info(
+        "Ingestion complete: %d accepted, %d rejected in %.1fs",
+        stats.rows_accepted,
+        stats.rows_rejected,
+        stats.duration_s,
+    )
     return stats

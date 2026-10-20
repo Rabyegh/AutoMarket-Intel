@@ -29,7 +29,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-
 # Mapping from normalized filename stem → canonical make name
 MAKE_FROM_FILENAME: dict[str, str] = {
     "audi": "Audi",
@@ -47,9 +46,17 @@ MAKE_FROM_FILENAME: dict[str, str] = {
 
 # Files to ingest (schema A + B). Unclean files are excluded by default.
 INGESTIBLE_FILES: set[str] = {
-    "audi.csv", "bmw.csv", "ford.csv", "hyundi.csv", "merc.csv",
-    "skoda.csv", "toyota.csv", "vauxhall.csv", "vw.csv",
-    "cclass.csv", "focus.csv",
+    "audi.csv",
+    "bmw.csv",
+    "ford.csv",
+    "hyundi.csv",
+    "merc.csv",
+    "skoda.csv",
+    "toyota.csv",
+    "vauxhall.csv",
+    "vw.csv",
+    "cclass.csv",
+    "focus.csv",
 }
 
 # Files present in the dataset but excluded from the default pipeline
@@ -59,9 +66,7 @@ EXCLUDED_FILES: dict[str, str] = {
         "Raw scrape format with split columns, GBP-formatted price strings, "
         "and missing mileage in the primary column. Retained as source reference."
     ),
-    "unclean focus.csv": (
-        "Raw scrape format — same issues as 'unclean cclass.csv'."
-    ),
+    "unclean focus.csv": ("Raw scrape format — same issues as 'unclean cclass.csv'."),
 }
 
 # Canonical column names after normalization
@@ -74,8 +79,8 @@ CANONICAL_COLUMNS = [
     "transmission",
     "mileage_miles",
     "fuel_type",
-    "tax_gbp",          # nullable — not present in Schema B
-    "mpg",              # nullable — not present in Schema B
+    "tax_gbp",  # nullable — not present in Schema B
+    "mpg",  # nullable — not present in Schema B
     "engine_size_l",
 ]
 
@@ -90,7 +95,7 @@ _COLUMN_MAP: dict[str, str] = {
     "fuel type": "fuel_type",
     "tax": "tax_gbp",
     "tax(£)": "tax_gbp",
-    "tax(?)": "tax_gbp",   # encoding artefact from hyundi.csv
+    "tax(?)": "tax_gbp",  # encoding artefact from hyundi.csv
     "mpg": "mpg",
     "enginesize": "engine_size_l",
     "engine size": "engine_size_l",

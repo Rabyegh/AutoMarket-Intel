@@ -5,19 +5,26 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-import pytest
-from automarket.simulation.snapshots import simulate_snapshots, SimulationConfig
 from datetime import date
+
+from automarket.simulation.snapshots import SimulationConfig, simulate_snapshots
 
 
 def _sample_rows(n=10):
     return [
         {
-            "row_id": f"abc{i:04d}", "source_file": "ford.csv",
-            "make": "Ford", "model": "Fiesta", "registration_year": 2018,
-            "price_gbp": 8000 + i * 100, "mileage_miles": 25000 + i * 500,
-            "fuel_type": "Petrol", "transmission": "Manual",
-            "engine_size_l": 1.0, "tax_gbp": 150, "mpg": 55.4,
+            "row_id": f"abc{i:04d}",
+            "source_file": "ford.csv",
+            "make": "Ford",
+            "model": "Fiesta",
+            "registration_year": 2018,
+            "price_gbp": 8000 + i * 100,
+            "mileage_miles": 25000 + i * 500,
+            "fuel_type": "Petrol",
+            "transmission": "Manual",
+            "engine_size_l": 1.0,
+            "tax_gbp": 150,
+            "mpg": 55.4,
         }
         for i in range(n)
     ]

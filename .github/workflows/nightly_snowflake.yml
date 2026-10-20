@@ -1,50 +1,219 @@
-name: Nightly Snowflake
+name: Nightly Snowflake Pipeline
 
+# ── Triggers ──────────────────────────────────────────────────────────────────
 on:
-  workflow_dispatch:        # manual trigger
+  workflow_dispatch:         # manual trigger (run button in GitHub UI)
+    inputs:
+      run_id:
+        description: "Pipeline run ID (leave blank to auto-generate)"
+        required: false
+        default: ""
+      skip_existing:
+        description: "Skip S3 objects that already exist (true/false)"
+        required: false
+        default: "true"
   schedule:
-    - cron: "0 3 * * 1"    # every Monday at 03:00 UTC (weekly only)
+    - cron: "0 3 * * 1"     # every Monday at 03:00 UTC
+
+# ── Concurrency ───────────────────────────────────────────────────────────────
+# Prevent overlapping cloud loads on the same branch.
+concurrency:
+  group: cloud-pipeline-${{ github.ref }}
+  cancel-in-progress: false   # do not cancel in-progress loads; queue instead
+
+# ── Permissions ───────────────────────────────────────────────────────────────
+permissions:
+  id-token: write    # required for AWS OIDC token request
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.11"
 
 jobs:
-  snowflake-run:
+  cloud-pipeline:
+    name: S3 → Snowflake → dbt
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    timeout-minutes: 45
 
+    steps:
+      # ── Checkout ────────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Python + uv setup ────────────────────────────────────────────────────
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install uv
         run: pip install uv
 
-      - name: Install dependencies
-        run: uv sync
+      - name: Install dependencies (core + cloud extras)
+        run: |
+          uv venv .venv --python ${{ env.PYTHON_VERSION }}
+          uv pip install \
+            dbt-core dbt-duckdb dbt-snowflake \
+            ruff pytest pandas pyarrow duckdb pydantic rich typer \
+            boto3 snowflake-connector-python cryptography
 
-      - name: Configure AWS credentials (OIDC)
+      # ── Validate secrets are present ─────────────────────────────────────────
+      - name: Validate required secrets
+        run: |
+          missing=()
+          for var in \
+            AWS_OIDC_ROLE_ARN \
+            AWS_DEFAULT_REGION \
+            S3_RAW_BUCKET \
+            SNOWFLAKE_ACCOUNT \
+            SNOWFLAKE_USER \
+            SNOWFLAKE_DATABASE \
+            SNOWFLAKE_WAREHOUSE \
+            SNOWFLAKE_ROLE \
+            SNOWFLAKE_PRIVATE_KEY; do
+            if [ -z "${!var}" ]; then
+              missing+=("$var")
+            fi
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "ERROR: Required secrets/variables not set: ${missing[*]}"
+            echo "Configure them as GitHub repository secrets (see docs/DEPLOY.md)."
+            exit 1
+          fi
+          echo "All required secrets are present."
+        env:
+          AWS_OIDC_ROLE_ARN: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+          S3_RAW_BUCKET: ${{ secrets.S3_RAW_BUCKET }}
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+          SNOWFLAKE_PRIVATE_KEY: ${{ secrets.SNOWFLAKE_PRIVATE_KEY }}
+
+      # ── AWS OIDC authentication ───────────────────────────────────────────────
+      - name: Configure AWS credentials (OIDC — no long-lived keys)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
+          role-session-name: automarket-nightly-${{ github.run_id }}
 
-      - name: Sync raw to S3
-        run: uv run vinpipe sync-s3
+      # ── Prepare Snowflake private key ─────────────────────────────────────────
+      - name: Write Snowflake private key to temp file
+        run: |
+          echo "${{ secrets.SNOWFLAKE_PRIVATE_KEY }}" > /tmp/snowflake_rsa_key.pem
+          chmod 600 /tmp/snowflake_rsa_key.pem
 
-      - name: Load raw to Snowflake
+      # ── Determine run ID ──────────────────────────────────────────────────────
+      - name: Set pipeline run ID
+        id: run_id
+        run: |
+          if [ -n "${{ github.event.inputs.run_id }}" ]; then
+            RUN_ID="${{ github.event.inputs.run_id }}"
+          else
+            RUN_ID="gh-$(date +%Y%m%d)-${{ github.run_number }}"
+          fi
+          echo "run_id=${RUN_ID}" >> "$GITHUB_OUTPUT"
+          echo "Pipeline run ID: ${RUN_ID}"
+
+      # ── Upload source CSVs + normalized Parquet to S3 ─────────────────────────
+      - name: Upload dataset to S3
+        env:
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+          S3_RAW_BUCKET: ${{ secrets.S3_RAW_BUCKET }}
+          S3_RAW_PREFIX: raw/used_cars
+        run: |
+          SKIP_FLAG=""
+          if [ "${{ github.event.inputs.skip_existing }}" = "true" ]; then
+            SKIP_FLAG="--skip-existing"
+          fi
+          uv run python -m automarket.cli upload-s3 \
+            --data-dir data/raw/used_cars \
+            --run-id "${{ steps.run_id.outputs.run_id }}" \
+            $SKIP_FLAG
+
+      # ── Load Parquet from S3 into Snowflake RAW ───────────────────────────────
+      - name: Load into Snowflake RAW (COPY INTO)
         env:
           SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
           SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
-          SNOWFLAKE_PRIVATE_KEY_PATH: /tmp/snowflake_key.p8
+          SNOWFLAKE_PRIVATE_KEY_PATH: /tmp/snowflake_rsa_key.pem
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+          SNOWFLAKE_SCHEMA: RAW
+          SNOWFLAKE_STAGE_NAME: RAW.S3_STAGE_AUTOMARKET
+          SNOWFLAKE_RAW_TABLE: RAW.RAW_USED_CAR_LISTINGS
+        run: |
+          uv run python -m automarket.cli load-snowflake \
+            "${{ steps.run_id.outputs.run_id }}"
+
+      # ── dbt build against Snowflake ────────────────────────────────────────────
+      - name: Install dbt packages
+        run: |
+          .venv/bin/python -c "from dbt.cli.main import cli; cli()" \
+            -- deps --project-dir dbt --profiles-dir dbt
+
+      - name: dbt build (Snowflake target)
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PRIVATE_KEY_PATH: /tmp/snowflake_rsa_key.pem
           SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
           SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
           SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
         run: |
-          echo "${{ secrets.SNOWFLAKE_PRIVATE_KEY }}" > /tmp/snowflake_key.p8
-          uv run vinpipe load --env snowflake
+          .venv/bin/python -c "from dbt.cli.main import cli; cli()" \
+            -- build \
+            --project-dir dbt \
+            --profiles-dir dbt \
+            --target snowflake \
+            --vars "run_id=${{ steps.run_id.outputs.run_id }}"
 
-      - name: dbt build (Snowflake target)
-        run: cd dbt && uv run dbt build --target snowflake
+      # ── Post-load verification ─────────────────────────────────────────────────
+      - name: Verify Snowflake row counts
+        if: success()
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PRIVATE_KEY_PATH: /tmp/snowflake_rsa_key.pem
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+          SNOWFLAKE_RAW_TABLE: RAW.RAW_USED_CAR_LISTINGS
+        run: |
+          uv run python - <<'EOF'
+          import os, sys
+          from automarket.storage.snowflake_loader import (
+              SnowflakeConfig, get_connection, verify_row_count
+          )
+          cfg = SnowflakeConfig.from_env()
+          conn = get_connection(cfg)
+          count = verify_row_count(conn, cfg.raw_table, expected_min=100_000)
+          conn.close()
+          if count < 100_000:
+              print(f"WARNING: RAW table has only {count} rows (expected >= 100,000)")
+              sys.exit(1)
+          print(f"Verification passed: {count:,} rows in {cfg.raw_table}")
+          EOF
 
-      - name: Parity check DuckDB vs Snowflake
-        run: uv run vinpipe parity-check
+      # ── Cleanup (always) ──────────────────────────────────────────────────────
+      - name: Remove private key file
+        if: always()
+        run: |
+          rm -f /tmp/snowflake_rsa_key.pem
+          echo "Private key file removed."
+
+      # ── Summary ───────────────────────────────────────────────────────────────
+      - name: Write job summary
+        if: always()
+        run: |
+          echo "## AutoMarket Intel Cloud Pipeline" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Item | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Run ID | ${{ steps.run_id.outputs.run_id }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Trigger | ${{ github.event_name }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Workflow run | ${{ github.run_id }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Status | ${{ job.status }} |" >> "$GITHUB_STEP_SUMMARY"

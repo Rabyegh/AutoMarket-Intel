@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -29,7 +29,7 @@ class RunLog:
             "run_id": self._run_id,
             "step": step,
             "status": status,
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
         }
         if counts:
             row["counts"] = counts

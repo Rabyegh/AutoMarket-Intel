@@ -4,44 +4,105 @@ These tests use real (small) CSV fixtures that match the actual source schema,
 and a temporary DuckDB database. They do not require any network or cloud access.
 """
 
-import sys
 import csv
-import tempfile
+import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-import pytest
 import duckdb
+import pytest
 
-from automarket.ingestion.pipeline import run_ingestion, read_and_normalize
-
+from automarket.ingestion.pipeline import read_and_normalize, run_ingestion
 
 # ── Fixtures ────────────────────────────────────────────────────────────────
 
 VALID_ROWS = [
-    {"model": " Fiesta", "year": "2018", "price": "8000", "transmission": "Manual",
-     "mileage": "25000", "fuelType": "Petrol", "tax": "150", "mpg": "55.4", "engineSize": "1.0"},
-    {"model": " Focus", "year": "2019", "price": "12000", "transmission": "Automatic",
-     "mileage": "15000", "fuelType": "Diesel", "tax": "130", "mpg": "60.1", "engineSize": "1.5"},
-    {"model": " Kuga", "year": "2017", "price": "15000", "transmission": "Manual",
-     "mileage": "40000", "fuelType": "Petrol", "tax": "165", "mpg": "45.0", "engineSize": "2.0"},
+    {
+        "model": " Fiesta",
+        "year": "2018",
+        "price": "8000",
+        "transmission": "Manual",
+        "mileage": "25000",
+        "fuelType": "Petrol",
+        "tax": "150",
+        "mpg": "55.4",
+        "engineSize": "1.0",
+    },
+    {
+        "model": " Focus",
+        "year": "2019",
+        "price": "12000",
+        "transmission": "Automatic",
+        "mileage": "15000",
+        "fuelType": "Diesel",
+        "tax": "130",
+        "mpg": "60.1",
+        "engineSize": "1.5",
+    },
+    {
+        "model": " Kuga",
+        "year": "2017",
+        "price": "15000",
+        "transmission": "Manual",
+        "mileage": "40000",
+        "fuelType": "Petrol",
+        "tax": "165",
+        "mpg": "45.0",
+        "engineSize": "2.0",
+    },
 ]
 
 INVALID_ROWS = [
     # price too low
-    {"model": " Ka", "year": "2015", "price": "50", "transmission": "Manual",
-     "mileage": "60000", "fuelType": "Petrol", "tax": "145", "mpg": "55.0", "engineSize": "1.0"},
+    {
+        "model": " Ka",
+        "year": "2015",
+        "price": "50",
+        "transmission": "Manual",
+        "mileage": "60000",
+        "fuelType": "Petrol",
+        "tax": "145",
+        "mpg": "55.0",
+        "engineSize": "1.0",
+    },
     # year out of range
-    {"model": " Galaxy", "year": "2060", "price": "9000", "transmission": "Automatic",
-     "mileage": "30000", "fuelType": "Diesel", "tax": "150", "mpg": "50.0", "engineSize": "2.0"},
+    {
+        "model": " Galaxy",
+        "year": "2060",
+        "price": "9000",
+        "transmission": "Automatic",
+        "mileage": "30000",
+        "fuelType": "Diesel",
+        "tax": "150",
+        "mpg": "50.0",
+        "engineSize": "2.0",
+    },
     # missing fuel type (empty string — must be rejected after normalization fix)
-    {"model": " Puma", "year": "2020", "price": "18000", "transmission": "Manual",
-     "mileage": "5000", "fuelType": "", "tax": "150", "mpg": "55.0", "engineSize": "1.0"},
+    {
+        "model": " Puma",
+        "year": "2020",
+        "price": "18000",
+        "transmission": "Manual",
+        "mileage": "5000",
+        "fuelType": "",
+        "tax": "150",
+        "mpg": "55.0",
+        "engineSize": "1.0",
+    },
 ]
 
-FIELDNAMES = ["model", "year", "price", "transmission", "mileage",
-              "fuelType", "tax", "mpg", "engineSize"]
+FIELDNAMES = [
+    "model",
+    "year",
+    "price",
+    "transmission",
+    "mileage",
+    "fuelType",
+    "tax",
+    "mpg",
+    "engineSize",
+]
 
 
 def write_fixture_csv(path: Path, rows: list[dict]) -> None:
@@ -71,6 +132,7 @@ def tmp_db(tmp_path):
 
 
 # ── Tests ────────────────────────────────────────────────────────────────────
+
 
 class TestReadAndNormalize:
     def test_accepts_valid_rows(self, valid_only_csv_dir):
