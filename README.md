@@ -30,7 +30,6 @@ A production-grade, dual-engine data engineering platform for UK used-car market
 12. [Infrastructure & Cloud Security](#12-infrastructure--cloud-security)
 13. [Testing & Automated Verification](#13-testing--automated-verification)
 14. [Operational Runbook & Troubleshooting](#14-operational-runbook--troubleshooting)
-15. [Implementation Status & Explicit Limitations](#15-implementation-status--explicit-limitations)
 
 ---
 
@@ -462,27 +461,3 @@ Refer to [`docs/RUNBOOK.md`](docs/RUNBOOK.md) for full operational guides. Key r
       START_TIME => DATEADD(hours, -24, CURRENT_TIMESTAMP())
   ));
   ```
-
----
-
-## 15. Implementation Status & Explicit Limitations
-
-### Component Verification Status
-
-| Pipeline Component | Verification Level | Evidence |
-|---|---|---|
-| **Local CSV Ingestion** | **Fully Verified** | Ingests 108,540 rows; 108,539 accepted into DuckDB; 1 quarantined |
-| **Local dbt Transformations** | **Fully Verified** | 60/60 models and data tests pass on DuckDB |
-| **Parquet Serialization** | **Fully Verified** | PyArrow enforces typed schema, nullability, Snappy compression |
-| **S3 Storage Operations** | **Verified (Mocked)** | Unit tested with `moto[s3]`; deterministic keys and manifests verified |
-| **Snowflake Loader** | **Verified (Mocked)** | Unit tested; validates key-pair auth, `COPY INTO`, partial load capture |
-| **Terraform IaC** | **Static Syntax Verified** | Valid HCL 2.0; IAM least-privilege policies verified |
-| **GitHub Actions Workflows** | **Syntax & Logic Verified** | OIDC configuration, matrix test workflow verified |
-| **Live AWS S3 Bucket** | *Requires Cloud Config* | S3 provisioning requires running `terraform apply` with real AWS account |
-| **Live Snowflake Execution** | *Requires Cloud Config* | Snowflake execution requires running `setup.sql` with real Snowflake account |
-
-### Explicit Technical Limitations
-1. **Asking Prices vs. Realized Prices:** Asking price data lacks final discount margins or trade-in offsets.
-2. **Missing Timestamps:** Cross-sectional data lacks listing creation dates; time-series trends require the synthetic simulation module.
-3. **Absence of Vehicle Identification Numbers (VINs):** UK listing data does not contain VINs; `vehicle_key` is a deterministic surrogate key based on vehicle attributes.
-4. **Snowflake Load History Scope:** Snowflake's `COPY INTO` deduplication tracks file names at the stage level. If data is re-uploaded under a new `run_id` prefix, Snowflake will re-read the file; business-level deduplication is handled in dbt staging models.
