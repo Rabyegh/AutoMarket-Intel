@@ -584,6 +584,8 @@ def run_upload(
         "bucket": config.bucket,
         "prefix": config.raw_prefix,
         "schema_version": "v1",
+        "status": "SUCCESS" if not summary.errors else "PARTIAL_FAILURE",
+        "errors": summary.errors,
         "files": manifest_files,
         "total_source_files": len(accepted_records),
         "total_rows": sum(len(r) for r in accepted_records.values()),

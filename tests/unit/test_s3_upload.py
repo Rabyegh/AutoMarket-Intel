@@ -47,6 +47,7 @@ from automarket.storage.s3 import (
     S3Config,
     S3ConfigError,
     S3UploadError,
+    run_upload,
     upload_manifest,
     upload_normalized_parquet,
     upload_source_csv,
@@ -223,6 +224,60 @@ class TestUploadManifest:
         assert loaded["total_rows"] == 100
 
 
+@pytest.mark.skipif(not MOTO_AVAILABLE, reason="moto[s3] not installed")
+class TestUploadRunToS3:
+    @mock_aws
+    def test_upload_run_creates_manifest_with_success_status(self, tmp_path):
+        s3 = boto3.client("s3", region_name="eu-west-1")
+        s3.create_bucket(
+            Bucket="test-bucket",
+            CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
+        )
+        csv_file = tmp_path / "audi.csv"
+        csv_file.write_text(
+            "model,year,price,transmission,mileage,fuelType,tax,mpg,engineSize\nA1,2017,12500,Manual,15735,Petrol,150,55.4,1.4\n"
+        )
+
+        records = [
+            {
+                "row_id": "a" * 16,
+                "source_file": "audi.csv",
+                "make": "Audi",
+                "model": "A1",
+                "year": 2017,
+                "price_gbp": 12500,
+                "transmission": "Manual",
+                "mileage_miles": 15735,
+                "fuel_type": "Petrol",
+                "tax_gbp": 150,
+                "mpg": 55.4,
+                "engine_size_l": 1.4,
+            }
+        ]
+
+        cfg = S3Config(bucket="test-bucket", region="eu-west-1")
+        summary = run_upload(
+            config=cfg,
+            data_dir=tmp_path,
+            run_id="run-full-001",
+            accepted_records={"audi": records},
+            upload_sources=True,
+        )
+
+        assert summary.success is True
+        assert len(summary.source_uploads) == 1
+        assert len(summary.parquet_uploads) == 1
+        assert summary.manifest_key != ""
+
+        # Verify manifest content in S3
+        obj = s3.get_object(Bucket="test-bucket", Key=summary.manifest_key)
+        manifest_data = json.loads(obj["Body"].read())
+        assert manifest_data["run_id"] == "run-full-001"
+        assert manifest_data["status"] == "SUCCESS"
+        assert manifest_data["errors"] == []
+        assert manifest_data["total_rows"] == 1
+
+
 # ── Error handling tests ──────────────────────────────────────────────────────
 
 
@@ -230,7 +285,6 @@ class TestS3UploadErrors:
     def test_boto3_not_installed_raises_s3_upload_error(self):
         """Simulate missing boto3 by patching the import."""
         from automarket.storage import s3 as s3_module
-
 
         def mock_get_client(region):
             raise S3UploadError(

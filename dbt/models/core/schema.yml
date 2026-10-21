@@ -29,8 +29,9 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('dim_vehicle')
-              field: vehicle_key
+              arguments:
+                to: ref('dim_vehicle')
+                field: vehicle_key
       - name: asking_price_gbp
         tests: [not_null]
       - name: mileage_miles

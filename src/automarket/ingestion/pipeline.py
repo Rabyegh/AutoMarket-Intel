@@ -19,8 +19,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger("automarket")
-
 from automarket.ingestion.discovery import (
     EXCLUDED_FILES,
     discover_files,
@@ -39,6 +37,8 @@ from automarket.ingestion.normalize import (
     parse_year,
 )
 from automarket.ingestion.validation import validate_record
+
+logger = logging.getLogger("automarket")
 
 
 @dataclass

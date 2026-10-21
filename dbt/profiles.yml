@@ -19,13 +19,13 @@ automarket_intel:
     # Or set via env: export DBT_TARGET=snowflake
     snowflake:
       type: snowflake
-      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
-      user: "{{ env_var('SNOWFLAKE_USER') }}"
-      private_key_path: "{{ env_var('SNOWFLAKE_PRIVATE_KEY_PATH') }}"
-      database: "{{ env_var('SNOWFLAKE_DATABASE') }}"
-      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE') }}"
-      role: "{{ env_var('SNOWFLAKE_ROLE') }}"
-      schema: staging                  # default schema; models override per dbt_project.yml
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT', '') }}"
+      user: "{{ env_var('SNOWFLAKE_USER', '') }}"
+      private_key_path: "{{ env_var('SNOWFLAKE_PRIVATE_KEY_PATH', '') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE', 'AUTOMARKET_DB') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', 'AUTOMARKET_WH') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE', 'AUTOMARKET_ROLE') }}"
+      schema: "{{ env_var('SNOWFLAKE_SCHEMA', 'STAGING') }}"
       threads: 4
       client_session_keep_alive: false
       query_tag: "automarket_intel_dbt"

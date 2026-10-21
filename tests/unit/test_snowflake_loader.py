@@ -22,6 +22,7 @@ from automarket.storage.snowflake_loader import (
     SnowflakeConfig,
     SnowflakeConfigError,
     SnowflakeLoadError,
+    copy_into_raw,
     verify_row_count,
 )
 
@@ -97,10 +98,53 @@ class TestLoadResult:
         assert "50000" in report
         assert "10" in report
 
+    def test_failure_when_rows_rejected_present(self):
+        result = LoadResult(files_loaded=1, rows_loaded=100, rows_rejected=2)
+        assert result.success is False
+
     def test_report_lists_errors(self):
         result = LoadResult(errors=["file1 failed: bad schema"])
         report = result.report()
         assert "file1 failed" in report
+
+
+class TestCopyIntoRawExecution:
+    def test_copy_into_raw_captures_partial_load_and_failure(self):
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_conn.cursor.return_value = mock_cursor
+
+        mock_cursor.description = [
+            ("file",),
+            ("status",),
+            ("rows_parsed",),
+            ("rows_loaded",),
+            ("first_error",),
+        ]
+        mock_cursor.fetchall.return_value = [
+            ("file_ok.parquet", "LOADED", 100, 100, None),
+            ("file_partial.parquet", "PARTIALLY_LOADED", 50, 40, "Invalid timestamp"),
+            ("file_failed.parquet", "LOAD_FAILED", 20, 0, "Schema mismatch"),
+        ]
+
+        cfg = SnowflakeConfig(
+            account="acc",
+            user="usr",
+            private_key_path="/fake/key.pem",
+            database="DB",
+            warehouse="WH",
+            role="ROLE",
+        )
+
+        res = copy_into_raw(mock_conn, cfg, run_id="run-123")
+
+        assert res.files_loaded == 2
+        assert res.rows_loaded == 140
+        assert res.rows_rejected == 10
+        assert res.success is False
+        assert len(res.errors) == 2
+        assert "file_partial.parquet partially loaded" in res.errors[0]
+        assert "file_failed.parquet failed" in res.errors[1]
 
 
 class TestCopyIntoSqlTemplate:

@@ -2,7 +2,10 @@
 
 # ── Developer setup ────────────────────────────────────────────────────────
 install:
-	uv pip install dbt-core dbt-duckdb ruff pytest pandas pyarrow duckdb pydantic rich typer
+	uv pip install -e ".[dev]"
+
+install-cloud:
+	uv pip install -e ".[dev,cloud]"
 
 lint:
 	uv run ruff check src tests

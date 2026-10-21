@@ -113,7 +113,8 @@ class LoadResult:
 
     @property
     def success(self) -> bool:
-        return len(self.errors) == 0
+        """True only if there are no errors, no failed files, and zero rejected rows."""
+        return len(self.errors) == 0 and self.rows_rejected == 0
 
     def report(self) -> str:
         lines = [
@@ -306,20 +307,29 @@ def copy_into_raw(
             result.copy_rows.append(row_dict)
 
             status = str(row_dict.get("status", "")).upper()
+            r_loaded = int(row_dict.get("rows_loaded", 0) or 0)
+            r_parsed = int(row_dict.get("rows_parsed", 0) or 0)
+            rejected = max(0, r_parsed - r_loaded)
+
             if status == "LOADED":
                 result.files_loaded += 1
-                result.rows_loaded += int(row_dict.get("rows_loaded", 0) or 0)
-                result.rows_rejected += int(row_dict.get("rows_parsed", 0) or 0) - int(
-                    row_dict.get("rows_loaded", 0) or 0
-                )
+                result.rows_loaded += r_loaded
+                result.rows_rejected += rejected
+                if rejected > 0:
+                    err = row_dict.get("first_error", f"{rejected} rows rejected")
+                    result.errors.append(
+                        f"File {row_dict.get('file', '?')} loaded with {rejected} rejected rows: {err}"
+                    )
             elif status == "LOAD_FAILED":
                 err = row_dict.get("first_error", "unknown error")
                 result.errors.append(f"File {row_dict.get('file', '?')} failed: {err}")
             elif status in ("PARTIALLY_LOADED",):
                 result.files_loaded += 1
-                result.rows_loaded += int(row_dict.get("rows_loaded", 0) or 0)
-                result.rows_rejected += int(row_dict.get("rows_parsed", 0) or 0) - int(
-                    row_dict.get("rows_loaded", 0) or 0
+                result.rows_loaded += r_loaded
+                result.rows_rejected += rejected
+                err = row_dict.get("first_error", f"{rejected} rows rejected")
+                result.errors.append(
+                    f"File {row_dict.get('file', '?')} partially loaded ({rejected} rejected rows): {err}"
                 )
 
         logger.info(

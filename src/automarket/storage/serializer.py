@@ -120,7 +120,9 @@ def records_to_parquet(
             ) from exc
         arrays.append(arr)
 
-    table = pa.table({name: arr for name, arr in zip(_FIELD_NAMES, arrays, strict=False)}, schema=schema)
+    table = pa.table(
+        {name: arr for name, arr in zip(_FIELD_NAMES, arrays, strict=False)}, schema=schema
+    )
 
     buf = io.BytesIO()
     pq.write_table(table, buf, compression=compression)
